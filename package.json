@@ -17,9 +17,18 @@
     "appId": "com.streamvibe.subwaysurferslive",
     "productName": "Subway Surfers LIVE",
     "copyright": "StreamVibe",
-    "directories": { "output": "dist" },
+    "directories": {
+      "output": "dist"
+    },
     "win": {
-      "target": [{ "target": "nsis", "arch": ["x64"] }],
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
       "icon": "assets/icon.ico"
     },
     "nsis": {
