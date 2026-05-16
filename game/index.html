@@ -201,6 +201,14 @@ html,body{width:100%;height:100%;overflow:hidden;background:#231F20;font-family:
     <div class="test-grid" id="sv-tests"></div>
   </div>
 
+  <!-- Object scanner -->
+  <div class="sv-section">
+    <div class="sv-label"><span>🔍</span> Find Game Objects</div>
+    <div style="font-size:10px;color:#4b5563;margin-bottom:8px;">Run while actively playing a run. Finds which Unity objects exist so triggers can work.</div>
+    <button class="sv-btn idle" id="sv-scan-btn" onclick="svScanObjects()" style="margin-top:0;">🔍 SCAN OBJECTS NOW</button>
+    <div id="sv-scan-results" style="margin-top:8px;font-family:monospace;font-size:10px;color:#10b981;display:none;word-break:break-all;"></div>
+  </div>
+
   <!-- Recent -->
   <div class="sv-section">
     <div class="sv-label"><span>📋</span> Recent Gifts</div>
@@ -501,6 +509,82 @@ function svAddRecent(user,gift){
     '<div class="rg-action" style="color:#a78bfa">'+(ACTIONS[gift.action]?ACTIONS[gift.action].label:gift.action)+'</div>';
   c.insertBefore(el,c.firstChild);
   while(c.children.length>50)c.removeChild(c.lastChild);
+}
+
+// ── Object scanner ────────────────────────────────────────────────
+function svScanObjects() {
+  var btn = document.getElementById('sv-scan-btn');
+  var results = document.getElementById('sv-scan-results');
+  btn.textContent = '⏳ Scanning...';
+  btn.disabled = true;
+  results.style.display = 'none';
+
+  var CANDIDATES = ["PickupManager","PickupManagerController","DailyLetterPickupManager","SHORTDailyLetterPickupManager","RouteManager","RunManager","AutomatedRunManager","GameManager","InGame","CoinManager","BoardManager","CharacterManager","InputManager","AssetManager","DataManager","AppManager","EventTesterManager","ComponentsManager","DynamicManagers","MissionManager","OnlineSettingsManager","SaveManager","ScoreManager","ThemeManager","UIScreenController","AwardsManager","PopupManager","AudioManager","TimeScaleManager","TopRunManager","RewardManager","MysteryPowerupEventManager","SuperMysteryBoxEventManager","WordHuntManager","WeeklyHuntManager","TokenCollectVFXManager","HuntTokenCollectVFXManager","CountdownPopupManager","BoardBundlePopupManager","LimitedBoardPopupManager","LimitedCharacterPopupManager","VideoAdPrizeManager","SaveMeManager","CoinsForVideoManager","FacebookWeeklyGiftManager","LocalizationManager","PoolManager","AdSystemManager","AnalyticsManager","ABTestManager","BoardScreenManager","CharacterScreenManager","CollectCoinsScreenManager","InAppManager","LocalNotificationsManager","LogicAssetsManager","ProductPlacementManager","FacebookSocialManager","GameCenterSocialManager","SocialManager","AssetBundleManager","CooldownManager","RenderTextureManager","QualitySettingsManager","TextureManager","SSEventsManagerController"];
+
+  var found = [];
+  var notFound = [];
+  var notFoundLog = [];
+
+  // Intercept Unity's console output to detect which objects exist
+  var _origLog = console.log.bind(console);
+  var _origWarn = console.warn.bind(console);
+  var _origErr = console.error.bind(console);
+
+  function intercept(msg) {
+    if (typeof msg !== 'string') return;
+    // "SendMessage: object X not found!" → object does NOT exist
+    var m1 = msg.match(/SendMessage: object (.+?) not found!/);
+    if (m1) { notFoundLog.push(m1[1]); }
+    // "SendMessage: object X does not have receiver" → object EXISTS, just no method
+    var m2 = msg.match(/SendMessage: object (.+?) does not have receiver/);
+    if (m2 && found.indexOf(m2[1]) < 0) { found.push(m2[1]); }
+  }
+
+  console.log = function() { intercept(arguments[0]); return _origLog.apply(console, arguments); };
+  console.warn = function() { intercept(arguments[0]); return _origWarn.apply(console, arguments); };
+  console.error = function() { intercept(arguments[0]); return _origErr.apply(console, arguments); };
+
+  var sm = (window.unityGame && typeof window.unityGame.SendMessage === 'function')
+    ? window.unityGame.SendMessage.bind(window.unityGame)
+    : (typeof window.SendMessage === 'function' ? window.SendMessage : null);
+
+  if (!sm) {
+    results.textContent = '❌ No SendMessage available. Launch game first.';
+    results.style.display = 'block';
+    btn.textContent = '🔍 SCAN OBJECTS NOW'; btn.disabled = false;
+    console.log = _origLog; console.warn = _origWarn; console.error = _origErr;
+    return;
+  }
+
+  // Fire each candidate with a probe method, 50ms apart
+  var i = 0;
+  var iv = setInterval(function() {
+    if (i >= CANDIDATES.length) {
+      clearInterval(iv);
+      // Restore console
+      console.log = _origLog; console.warn = _origWarn; console.error = _origErr;
+
+      // Small delay to let last messages arrive
+      setTimeout(function() {
+        btn.textContent = '🔍 SCAN OBJECTS NOW'; btn.disabled = false;
+        if (found.length > 0) {
+          results.innerHTML = '<b style="color:#10b981">✅ FOUND (' + found.length + '):</b><br>' +
+            found.map(function(n){ return '• ' + n; }).join('<br>') +
+            '<br><br><b style="color:#4b5563">Copy these names to use in triggers!</b>';
+          // Log to console too
+          console.log('[SV-SCAN] Found objects:', found);
+        } else {
+          results.innerHTML = '<b style="color:#ef4444">❌ No objects found.</b><br>' +
+            'Make sure a run is active when scanning.<br>' +
+            'Tried ' + CANDIDATES.length + ' names.';
+        }
+        results.style.display = 'block';
+      }, 500);
+      return;
+    }
+    try { sm(CANDIDATES[i], '__svprobe__'); } catch(e) {}
+    i++;
+  }, 40);
 }
 
 // ── Init ──────────────────────────────────────────────────────────
