@@ -1,0 +1,124 @@
+name: Build & Release
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version (e.g. 1.0.0)'
+        required: false
+        default: '1.0.0'
+
+jobs:
+  build-windows:
+    name: Build Windows EXE
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Get version from tag
+        id: version
+        shell: bash
+        run: |
+          if [[ "${GITHUB_REF}" == refs/tags/* ]]; then
+            VERSION="${GITHUB_REF#refs/tags/v}"
+          else
+            VERSION="${{ github.event.inputs.version || '1.0.0' }}"
+          fi
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Building version: $VERSION"
+
+      - name: Update package.json version
+        shell: bash
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          node -e "
+            const fs = require('fs');
+            const pkg = JSON.parse(fs.readFileSync('package.json','utf8'));
+            pkg.version = '$VERSION';
+            fs.writeFileSync('package.json', JSON.stringify(pkg, null, 2));
+            console.log('Updated version to', pkg.version);
+          "
+
+      - name: Enable Developer Mode (for symlinks)
+        shell: powershell
+        run: |
+          $registryPath = "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\AppModelUnlock"
+          if (-not (Test-Path $registryPath)) {
+            New-Item -Path $registryPath -Force | Out-Null
+          }
+          Set-ItemProperty -Path $registryPath -Name "AllowDevelopmentWithoutDevLicense" -Value 1 -Type DWord
+          Write-Host "Developer mode enabled"
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Create icon placeholder (if no icon)
+        shell: powershell
+        run: |
+          if (-not (Test-Path "assets\icon.ico")) {
+            New-Item -ItemType Directory -Force -Path "assets" | Out-Null
+            # Remove icon requirement from package.json if no icon present
+            $pkg = Get-Content package.json | ConvertFrom-Json
+            $pkg.build.win.PSObject.Properties.Remove('icon')
+            $pkg.build.nsis.PSObject.Properties.Remove('installerIcon')
+            $pkg.build.nsis.PSObject.Properties.Remove('uninstallerIcon')
+            $pkg | ConvertTo-Json -Depth 10 | Out-File package.json -Encoding utf8
+            Write-Host "Removed icon requirement from build config"
+          }
+
+      - name: Build installer
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: false
+          CSC_LINK: ''
+        run: npm run build
+
+      - name: List build output
+        shell: powershell
+        run: Get-ChildItem dist -Recurse | Select-Object FullName, Length
+
+      - name: Upload installer artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: subway-surfers-live-v${{ steps.version.outputs.version }}
+          path: |
+            dist/*.exe
+            dist/*.zip
+          if-no-files-found: warn
+
+      - name: Create GitHub Release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          name: "Subway Surfers LIVE v${{ steps.version.outputs.version }}"
+          body: |
+            ## Subway Surfers LIVE v${{ steps.version.outputs.version }}
+
+            ### Install
+            Download and run the `.exe` installer below.
+
+            ### What's included
+            - Full Subway Surfers game
+            - TikTok Live gift integration
+            - Customizable gift → trigger mapping
+            - Press **F2** to open/close the settings panel
+
+            ### TikTok Bridge
+            Requires a TikTok Live bridge running on `ws://127.0.0.1:21213`
+          files: |
+            dist/*.exe
+            dist/*.zip
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

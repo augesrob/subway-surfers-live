@@ -1,0 +1,670 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Subway Surfers LIVE</title>
+<style>
+/* ── Reset ── */
+*{margin:0;padding:0;box-sizing:border-box;}
+html,body{width:100%;height:100%;overflow:hidden;background:#231F20;font-family:'Segoe UI',Arial,sans-serif;}
+
+/* ── Game fills the window ── */
+#loader,#game-container{z-index:1;}
+
+/* ── Flash overlay ── */
+#sv-flash{
+  position:fixed;top:50px;left:50%;transform:translateX(-50%);
+  z-index:5000;pointer-events:none;opacity:0;
+  font-size:28px;font-weight:900;font-family:Arial,sans-serif;
+  white-space:nowrap;background:rgba(0,0,0,.85);
+  padding:12px 30px;border-radius:40px;border:2px solid currentColor;
+  letter-spacing:1px;
+}
+#sv-flash.show{animation:svflash 2.5s forwards;}
+@keyframes svflash{
+  0%  {opacity:0;transform:translateX(-50%) scale(.85);}
+  10% {opacity:1;transform:translateX(-50%) scale(1.05);}
+  20% {transform:translateX(-50%) scale(1);}
+  75% {opacity:1;}
+  100%{opacity:0;transform:translateX(-50%) translateY(-30px);}
+}
+
+/* ── Settings tab (always visible on right edge) ── */
+#sv-tab{
+  position:fixed;right:0;top:50%;transform:translateY(-50%);
+  z-index:4000;background:linear-gradient(180deg,#7c3aed,#db2777);
+  color:#fff;border:none;cursor:pointer;
+  padding:14px 7px;border-radius:10px 0 0 10px;
+  writing-mode:vertical-rl;font-size:10px;font-weight:900;
+  letter-spacing:3px;text-transform:uppercase;
+  transition:all .2s;box-shadow:-3px 0 20px rgba(124,58,237,.4);
+  user-select:none;
+}
+#sv-tab:hover{padding-left:11px;box-shadow:-5px 0 30px rgba(124,58,237,.7);}
+
+/* ── Settings panel ── */
+#sv-panel{
+  position:fixed;right:-360px;top:0;width:360px;height:100%;
+  background:rgba(8,9,18,.96);border-left:1px solid #1e2240;
+  z-index:3999;transition:right .3s cubic-bezier(.4,0,.2,1);
+  overflow-y:auto;overflow-x:hidden;
+  box-shadow:-10px 0 40px rgba(0,0,0,.6);
+}
+#sv-panel.open{right:0;}
+#sv-panel::-webkit-scrollbar{width:4px;}
+#sv-panel::-webkit-scrollbar-track{background:transparent;}
+#sv-panel::-webkit-scrollbar-thumb{background:#1e2240;border-radius:2px;}
+
+/* ── Panel header ── */
+.sv-header{
+  background:linear-gradient(135deg,#0d0e1a,#12142a);
+  padding:16px 18px;border-bottom:1px solid #1e2240;
+  display:flex;align-items:center;justify-content:space-between;
+  position:sticky;top:0;z-index:10;
+}
+.sv-logo{font-size:13px;font-weight:900;background:linear-gradient(90deg,#a78bfa,#f472b6);
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;}
+.sv-close{background:none;border:none;color:#4b5563;cursor:pointer;font-size:18px;
+  padding:4px;border-radius:4px;transition:color .15s;}
+.sv-close:hover{color:#fff;}
+.sv-version{font-size:9px;color:#374151;font-family:monospace;}
+
+/* ── Sections ── */
+.sv-section{padding:14px 16px;border-bottom:1px solid #0d0f1f;}
+.sv-label{font-size:9px;font-weight:700;letter-spacing:3px;color:#4b5563;
+  text-transform:uppercase;margin-bottom:10px;display:flex;align-items:center;gap:6px;}
+.sv-label span{font-size:14px;}
+
+/* ── Inputs ── */
+.sv-input{
+  width:100%;background:#060710;border:1px solid #1e2240;
+  border-radius:8px;padding:9px 12px;color:#fff;font-size:12px;
+  outline:none;transition:border-color .2s;
+}
+.sv-input:focus{border-color:#7c3aed;}
+.sv-input::placeholder{color:#374151;}
+
+/* ── Connect button ── */
+.sv-connect-btn{
+  width:100%;margin-top:8px;padding:10px;border-radius:8px;
+  font-weight:900;font-size:11px;letter-spacing:1.5px;cursor:pointer;
+  border:none;transition:all .2s;text-transform:uppercase;
+}
+.sv-connect-btn.idle{background:linear-gradient(135deg,#7c3aed,#db2777);color:#fff;}
+.sv-connect-btn.idle:hover{opacity:.9;transform:scale(1.01);}
+.sv-connect-btn.connected{background:#1a1f35;color:#10b981;border:1px solid #065f46;}
+.sv-connect-btn.connecting{background:rgba(245,158,11,.1);color:#f59e0b;border:1px solid #92400e;}
+
+/* ── Status row ── */
+.sv-status{display:flex;align-items:center;gap:8px;margin-top:8px;font-size:11px;color:#6b7280;}
+.sv-dot{width:8px;height:8px;border-radius:50%;background:#374151;flex-shrink:0;transition:all .3s;}
+.sv-dot.on{background:#10b981;box-shadow:0 0 8px #10b981;}
+.sv-dot.warn{background:#f59e0b;animation:pulse 1s infinite;}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+.sv-error{color:#ef4444;font-size:10px;margin-top:5px;display:none;}
+
+/* ── Gift rows ── */
+.gift-row{
+  display:flex;align-items:center;gap:8px;padding:7px 4px;
+  border-radius:6px;transition:background .15s;
+}
+.gift-row:hover{background:rgba(255,255,255,.03);}
+.gift-emoji{font-size:18px;width:26px;text-align:center;flex-shrink:0;}
+.gift-info{flex:1;min-width:0;}
+.gift-name{font-size:11px;font-weight:700;color:#e2e8f0;}
+.gift-coins{font-size:10px;color:#4b5563;font-family:monospace;}
+.gift-action{
+  background:#0a0b14;border:1px solid #1e2240;color:#9ca3af;
+  border-radius:6px;padding:5px 8px;font-size:10px;cursor:pointer;
+  outline:none;max-width:130px;transition:border-color .2s;
+}
+.gift-action:focus{border-color:#7c3aed;color:#fff;}
+.gift-del{background:none;border:none;color:#374151;cursor:pointer;
+  font-size:14px;padding:2px 4px;border-radius:4px;transition:color .15s;flex-shrink:0;}
+.gift-del:hover{color:#ef4444;}
+
+/* ── Add gift button ── */
+.sv-add-btn{
+  width:100%;margin-top:10px;padding:8px;border-radius:7px;
+  background:transparent;border:1px dashed #1e2240;color:#4b5563;
+  font-size:11px;cursor:pointer;transition:all .2s;font-weight:600;
+}
+.sv-add-btn:hover{border-color:#7c3aed;color:#a78bfa;}
+
+/* ── Add gift form ── */
+.sv-add-form{
+  background:#060710;border:1px solid #1e2240;border-radius:8px;
+  padding:12px;margin-top:8px;display:none;
+}
+.sv-add-form.show{display:block;}
+.sv-form-row{display:flex;gap:6px;margin-bottom:6px;}
+.sv-form-row .sv-input{flex:1;}
+.sv-mini-input{
+  background:#0a0b14;border:1px solid #1e2240;color:#fff;
+  border-radius:6px;padding:6px 8px;font-size:11px;outline:none;width:100%;
+}
+.sv-mini-input:focus{border-color:#7c3aed;}
+.sv-form-actions{display:flex;gap:6px;margin-top:8px;}
+.sv-form-save{flex:1;padding:7px;border-radius:6px;background:linear-gradient(135deg,#7c3aed,#db2777);
+  color:#fff;border:none;font-size:10px;font-weight:900;cursor:pointer;letter-spacing:1px;}
+.sv-form-cancel{padding:7px 12px;border-radius:6px;background:#0a0b14;
+  color:#6b7280;border:1px solid #1e2240;font-size:10px;cursor:pointer;}
+
+/* ── Test buttons ── */
+.test-grid{display:grid;grid-template-columns:1fr 1fr;gap:5px;}
+.test-btn{
+  padding:7px 5px;border-radius:7px;border:1px solid #1e2240;
+  font-size:10px;font-weight:700;cursor:pointer;background:transparent;
+  color:#9ca3af;transition:all .15s;text-align:center;
+}
+.test-btn:hover{background:rgba(255,255,255,.05);border-color:#7c3aed;color:#a78bfa;}
+.test-btn:active{transform:scale(.95);}
+
+/* ── Recent gifts ── */
+.recent-gift{
+  background:#0d0f1f;border:1px solid #1e2240;border-radius:8px;
+  padding:8px 10px;margin-bottom:6px;
+}
+.rg-user{font-size:11px;font-weight:700;color:#a78bfa;}
+.rg-action{font-size:10px;font-weight:700;margin-top:2px;}
+.rg-time{font-size:9px;color:#374151;float:right;font-family:monospace;}
+.rg-empty{color:#374151;font-size:11px;text-align:center;padding:20px 0;}
+
+/* ── Gift count badge ── */
+#sv-gift-count{
+  position:fixed;right:28px;top:12px;z-index:4000;
+  background:linear-gradient(135deg,#7c3aed,#db2777);
+  color:#fff;font-size:10px;font-weight:900;
+  padding:4px 9px;border-radius:20px;
+  pointer-events:none;opacity:0;transition:opacity .3s;
+  box-shadow:0 2px 12px rgba(124,58,237,.5);
+}
+#sv-gift-count.show{opacity:1;}
+</style>
+</head>
+<body>
+
+<!-- Flash overlay (on top of game) -->
+<div id="sv-flash"></div>
+
+<!-- Gift count badge -->
+<div id="sv-gift-count">🎁 0</div>
+
+<!-- Settings tab toggle -->
+<button id="sv-tab" onclick="svTogglePanel()">⚙ LIVE</button>
+
+<!-- Settings panel -->
+<div id="sv-panel">
+
+  <!-- Header -->
+  <div class="sv-header">
+    <div>
+      <div class="sv-logo">StreamVibe — Subway Surfers LIVE</div>
+      <div class="sv-version" id="sv-ver">v1.0.0</div>
+    </div>
+    <button class="sv-close" onclick="svTogglePanel()" title="Close">✕</button>
+  </div>
+
+  <!-- TikTok Live section -->
+  <div class="sv-section">
+    <div class="sv-label"><span>📱</span> TikTok Live</div>
+    <input class="sv-input" id="sv-username" placeholder="@yourusername" />
+    <button class="sv-connect-btn idle" id="sv-connect-btn" onclick="svToggleConnect()">
+      ♪ CONNECT MY LIVE
+    </button>
+    <div class="sv-status">
+      <div class="sv-dot" id="sv-dot"></div>
+      <span id="sv-status-text">Not connected</span>
+    </div>
+    <div class="sv-error" id="sv-error"></div>
+  </div>
+
+  <!-- Gift configuration -->
+  <div class="sv-section">
+    <div class="sv-label"><span>🎁</span> Gift → Trigger</div>
+    <div id="sv-gift-list"></div>
+    <button class="sv-add-btn" onclick="svShowAddForm()">+ Add Custom Gift</button>
+
+    <!-- Add gift form -->
+    <div class="sv-add-form" id="sv-add-form">
+      <div class="sv-form-row">
+        <input class="sv-mini-input" id="af-emoji" placeholder="🎁" style="max-width:50px;text-align:center;">
+        <input class="sv-mini-input" id="af-name" placeholder="Gift name">
+        <input class="sv-mini-input" id="af-coins" placeholder="coins" type="number" min="1" style="max-width:60px;">
+      </div>
+      <select class="gift-action" id="af-action" style="width:100%;">
+        <option value="">— Choose trigger —</option>
+      </select>
+      <div class="sv-form-actions">
+        <button class="sv-form-save" onclick="svSaveNewGift()">SAVE</button>
+        <button class="sv-form-cancel" onclick="svHideAddForm()">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Test buttons -->
+  <div class="sv-section">
+    <div class="sv-label"><span>🧪</span> Test Triggers</div>
+    <div class="test-grid" id="sv-test-grid"></div>
+  </div>
+
+  <!-- Recent gifts -->
+  <div class="sv-section">
+    <div class="sv-label"><span>📋</span> Recent Gifts</div>
+    <div id="sv-recent"><div class="rg-empty">Waiting for gifts...</div></div>
+  </div>
+
+</div><!-- /sv-panel -->
+
+<!-- ══════════════════════════════════════════
+     GAME SETUP
+══════════════════════════════════════════ -->
+<script>
+// ── PokiSDK Stub (must run before game scripts) ──────────────────
+(function() {
+  var noop = function() {};
+  var resolved = function() { return Promise.resolve(); };
+  window.PokiSDK = {
+    init:resolved, gameInteractive:resolved, commercialBreak:resolved,
+    rewardedBreak:resolved, gameLoadingStart:noop, gameLoadingFinished:noop,
+    gameplayStart:noop, gameplayStop:noop, roundStart:noop, roundEnd:noop,
+    happyTime:noop, customEvent:noop, disableProgrammatic:noop, muteAd:noop,
+    destroyAd:noop, setDebug:noop, logError:noop, sendHighscore:noop,
+    gameLoadingProgress:noop, toggleNonPersonalized:noop, setConsentString:noop,
+    setPlayerAge:noop, shareableURL:function(u){return u||location.href;},
+    getLeaderboard:function(){return Promise.resolve({});}
+  };
+  // Kill ad-related createElement hooks
+  var _orig = document.createElement.bind(document);
+  document.createElement = function(tag) {
+    var el = _orig(tag);
+    if (tag.toLowerCase() === 'script') {
+      el.addEventListener('load', function() {
+        if (el.src && el.src.indexOf('poki-sdk-core') > -1) {
+          setTimeout(function() {
+            if (window.PokiSDK) {
+              window.PokiSDK.gameInteractive = resolved;
+              window.PokiSDK.commercialBreak = resolved;
+              window.PokiSDK.rewardedBreak   = resolved;
+              window.PokiSDK.init            = resolved;
+            }
+          }, 0);
+        }
+      });
+    }
+    return el;
+  };
+  window.commercialBreak = function(cb) { if(cb) cb(); };
+  window.rewardedBreak   = function(cb) { if(cb) cb(); };
+  window.showUnitywebNoSupport = function() {};
+
+  // initPokiBridge interceptor (survives later overwrites)
+  var _bridgeFn = null;
+  function wrapBridge(fn) {
+    return function(name) {
+      window.pokiBridge = name;
+      console.log('[SV] pokiBridge:', name);
+      return fn ? fn(name) : undefined;
+    };
+  }
+  Object.defineProperty(window, 'initPokiBridge', {
+    configurable:true,
+    get:function(){return _bridgeFn;},
+    set:function(fn){
+      _bridgeFn = wrapBridge(fn);
+      Object.defineProperty(window,'initPokiBridge',{value:_bridgeFn,writable:true,configurable:true});
+    }
+  });
+
+  // Track gameplay state
+  var _origGS = window.PokiSDK.gameplayStart;
+  window.PokiSDK.gameplayStart = function() {
+    window._svInGame = true;
+    console.log('[SV] gameplayStart');
+    if (typeof _origGS === 'function') _origGS.apply(this, arguments);
+  };
+  window.PokiSDK.gameplayStop = function() {
+    window._svInGame = false;
+    console.log('[SV] gameplayStop');
+  };
+})();
+
+// ── Game config ──────────────────────────────────────────────────
+window.config = {
+  loader: 'unity', debug: false,
+  maxRatio: 16/9, minRatio: 9/16,
+  title: 'Subway Surfers: San Francisco',
+  unityVersion: '2019.4.18f1',
+  unityWebglBuildUrl: 'game/Build/SanFrancisco/SanFrancisco.json',
+  fileSize: 35,
+  cachedDecompressedFileSizes: {
+    'SanFrancisco.asm.code.unityweb':           9077143,
+    'SanFrancisco.asm.framework.unityweb':      86369,
+    'SanFrancisco.asm.memory.unityweb':         951447,
+    'SanFrancisco.data.unityweb':               18323917,
+    'SanFrancisco.wasm.code.unityweb':          7279617,
+    'SanFrancisco.wasm.framework.sv1.unityweb': 90693,
+  },
+};
+</script>
+<script src="game/4399.z.js"></script>
+<script src="game/master-loader.js"></script>
+
+<!-- ══════════════════════════════════════════
+     APP LOGIC
+══════════════════════════════════════════ -->
+<script>
+// ── Flash ─────────────────────────────────────────────────────────
+var _flashTimer;
+function svFlash(label, color) {
+  var el = document.getElementById('sv-flash');
+  el.textContent = label;
+  el.style.color = color;
+  el.style.borderColor = color;
+  el.style.boxShadow = '0 0 40px ' + color + '88';
+  el.classList.remove('show');
+  void el.offsetWidth;
+  el.classList.add('show');
+  clearTimeout(_flashTimer);
+  _flashTimer = setTimeout(function() { el.classList.remove('show'); }, 2500);
+}
+
+// ── Keyboard simulation ───────────────────────────────────────────
+function svKey(key, times) {
+  times = times || 1;
+  var delay = 0;
+  for (var i = 0; i < times; i++) {
+    (function(d) {
+      setTimeout(function() {
+        var target = document.querySelector('canvas') || document.body;
+        target.dispatchEvent(new KeyboardEvent('keydown', {key:key, code:key, bubbles:true, cancelable:true}));
+        setTimeout(function() {
+          target.dispatchEvent(new KeyboardEvent('keyup', {key:key, code:key, bubbles:true, cancelable:true}));
+        }, 80);
+      }, d);
+    })(delay);
+    delay += 200;
+  }
+}
+
+// ── SendMessage (best-effort) ─────────────────────────────────────
+function svSend(obj, method, param) {
+  var sm = (window.unityGame && typeof window.unityGame.SendMessage === 'function')
+    ? window.unityGame.SendMessage.bind(window.unityGame)
+    : (typeof window.SendMessage === 'function' ? window.SendMessage : null);
+  if (!sm) return false;
+  try {
+    if (param !== undefined) sm(obj, method, param);
+    else sm(obj, method);
+    return true;
+  } catch(e) { return false; }
+}
+
+// ── All trigger actions ───────────────────────────────────────────
+var ACTIONS = {
+  'coins':      { label: '💰 Spawn Coins',      flash: { text: '💰 COINS!',      color: '#ffd700' }, fn: function() {
+    svKey('ArrowUp');
+    ['PickupManager','InGame','GameManager'].forEach(function(o) {
+      svSend(o,'SpawnCoinRows','5'); svSend(o,'SpawnCoins','30');
+    });
+  }},
+  'jump':       { label: '⬆️ Jump!',             flash: { text: '⬆️ JUMP!',        color: '#55efc4' }, fn: function() { svKey('ArrowUp', 1); }},
+  'double_jump':{ label: '⬆️⬆️ Double Jump',    flash: { text: '⬆️⬆️ JUMPS!',     color: '#00b894' }, fn: function() { svKey('ArrowUp', 2); }},
+  'slide':      { label: '⬇️ Slide/Roll',        flash: { text: '⬇️ SLIDE!',       color: '#74b9ff' }, fn: function() { svKey('ArrowDown', 1); }},
+  'left':       { label: '⬅️ Move Left',         flash: { text: '⬅️ LEFT!',        color: '#a29bfe' }, fn: function() { svKey('ArrowLeft', 1); }},
+  'right':      { label: '➡️ Move Right',        flash: { text: '➡️ RIGHT!',       color: '#fd79a8' }, fn: function() { svKey('ArrowRight', 1); }},
+  'jetpack':    { label: '🚀 Jetpack Effect',    flash: { text: '🚀 JETPACK!',     color: '#ff9f43' }, fn: function() {
+    ['PickupManager','InGame','GameManager'].forEach(function(o) {
+      svSend(o,'ForceSpawnPickupType','Jetpack');
+    });
+  }},
+  'magnet':     { label: '🧲 Magnet Effect',     flash: { text: '🧲 MAGNET!',      color: '#74b9ff' }, fn: function() {
+    ['PickupManager','InGame','GameManager'].forEach(function(o) {
+      svSend(o,'ForceSpawnPickupType','CoinMagnet');
+    });
+  }},
+  'hoverboard': { label: '🛹 Hoverboard Effect', flash: { text: '🛹 HOVERBOARD!',  color: '#fd79a8' }, fn: function() {
+    ['PickupManager','InGame','GameManager'].forEach(function(o) {
+      svSend(o,'ForceSpawnPickupType','Hoverboard');
+    });
+  }},
+  'x2':         { label: '✖️ x2 Score Effect',   flash: { text: '✖️ x2 SCORE!',   color: '#a29bfe' }, fn: function() {
+    ['PickupManager','InGame','GameManager'].forEach(function(o) {
+      svSend(o,'ForceSpawnPickupType','Multiplier');
+    });
+  }},
+  'sneakers':   { label: '👟 Super Sneakers',    flash: { text: '👟 SNEAKERS!',    color: '#55efc4' }, fn: function() {
+    ['PickupManager','InGame','GameManager'].forEach(function(o) {
+      svSend(o,'ForceSpawnPickupType','SuperSneakers');
+    });
+  }},
+  'speed':      { label: '⚡ Speed Boost',       flash: { text: '⚡ SPEED!',       color: '#fdcb6e' }, fn: function() {
+    svKey('ArrowUp'); svKey('ArrowUp');
+  }},
+  'celebrate':  { label: '🎉 Celebration',       flash: { text: '🎉 HYPE!',        color: '#fd79a8' }, fn: function() {} },
+  'none':       { label: '❌ No Action',         flash: null, fn: function() {} },
+};
+
+function svFireAction(actionKey) {
+  var a = ACTIONS[actionKey];
+  if (!a) return;
+  if (a.flash) svFlash(a.flash.text, a.flash.color);
+  if (a.fn) a.fn();
+}
+
+// ── Default gift config ───────────────────────────────────────────
+var DEFAULT_GIFTS = [
+  { id:'rose',        emoji:'🌹', name:'Rose',        coins:1,   action:'coins'     },
+  { id:'bouquet',     emoji:'💐', name:'Bouquet',     coins:50,  action:'magnet'    },
+  { id:'galaxy',      emoji:'🌌', name:'Galaxy',      coins:100, action:'jetpack'   },
+  { id:'drama_queen', emoji:'👑', name:'Drama Queen', coins:200, action:'x2'        },
+  { id:'lion',        emoji:'🦁', name:'Lion',        coins:500, action:'sneakers'  },
+  { id:'diamond',     emoji:'💎', name:'Diamond',     coins:999, action:'hoverboard'},
+];
+
+// Load from localStorage or use defaults
+var gifts = [];
+function svLoadGifts() {
+  try {
+    var saved = localStorage.getItem('sv_gifts');
+    gifts = saved ? JSON.parse(saved) : DEFAULT_GIFTS.map(function(g) { return Object.assign({}, g); });
+  } catch(e) {
+    gifts = DEFAULT_GIFTS.map(function(g) { return Object.assign({}, g); });
+  }
+}
+function svSaveGifts() {
+  try { localStorage.setItem('sv_gifts', JSON.stringify(gifts)); } catch(e) {}
+}
+
+// ── Render gift list ──────────────────────────────────────────────
+function svRenderGifts() {
+  var list = document.getElementById('sv-gift-list');
+  var html = '';
+  gifts.forEach(function(g, i) {
+    html += '<div class="gift-row">' +
+      '<span class="gift-emoji">' + g.emoji + '</span>' +
+      '<div class="gift-info">' +
+        '<div class="gift-name">' + g.name + '</div>' +
+        '<div class="gift-coins">' + g.coins + 'c</div>' +
+      '</div>' +
+      '<select class="gift-action" onchange="svSetAction(' + i + ',this.value)">' +
+        svActionOptions(g.action) +
+      '</select>' +
+      '<button class="gift-del" onclick="svDeleteGift(' + i + ')" title="Remove">✕</button>' +
+    '</div>';
+  });
+  list.innerHTML = html;
+
+  // Test grid
+  var tg = document.getElementById('sv-test-grid');
+  tg.innerHTML = gifts.map(function(g, i) {
+    return '<button class="test-btn" onclick="svFireGiftByIndex(' + i + ')">' +
+      g.emoji + ' ' + g.name + '</button>';
+  }).join('');
+}
+
+function svActionOptions(selected) {
+  return Object.keys(ACTIONS).map(function(k) {
+    return '<option value="' + k + '"' + (k === selected ? ' selected' : '') + '>' + ACTIONS[k].label + '</option>';
+  }).join('');
+}
+
+function svSetAction(i, val) {
+  gifts[i].action = val;
+  svSaveGifts();
+}
+function svDeleteGift(i) {
+  gifts.splice(i, 1);
+  svSaveGifts();
+  svRenderGifts();
+}
+function svFireGiftByIndex(i) {
+  if (gifts[i]) svFireAction(gifts[i].action);
+}
+
+// ── Add gift form ─────────────────────────────────────────────────
+function svShowAddForm() {
+  // Populate action select in form
+  document.getElementById('af-action').innerHTML =
+    '<option value="">— Choose trigger —</option>' + svActionOptions('');
+  document.getElementById('sv-add-form').classList.add('show');
+}
+function svHideAddForm() {
+  document.getElementById('sv-add-form').classList.remove('show');
+  document.getElementById('af-emoji').value = '';
+  document.getElementById('af-name').value = '';
+  document.getElementById('af-coins').value = '';
+}
+function svSaveNewGift() {
+  var emoji  = document.getElementById('af-emoji').value.trim()  || '🎁';
+  var name   = document.getElementById('af-name').value.trim();
+  var coins  = parseInt(document.getElementById('af-coins').value) || 1;
+  var action = document.getElementById('af-action').value;
+  if (!name) { alert('Enter a gift name'); return; }
+  gifts.push({ id: 'custom_' + Date.now(), emoji, name, coins, action: action || 'none' });
+  svSaveGifts();
+  svRenderGifts();
+  svHideAddForm();
+}
+
+// ── Panel toggle ──────────────────────────────────────────────────
+var _panelOpen = false;
+function svTogglePanel() {
+  _panelOpen = !_panelOpen;
+  document.getElementById('sv-panel').classList.toggle('open', _panelOpen);
+  document.getElementById('sv-tab').style.opacity = _panelOpen ? '0' : '1';
+  document.getElementById('sv-tab').style.pointerEvents = _panelOpen ? 'none' : 'auto';
+}
+// F2 toggles panel
+document.addEventListener('keydown', function(e) {
+  if (e.key === 'F2') { e.preventDefault(); svTogglePanel(); }
+});
+
+// ── TikTok WebSocket ──────────────────────────────────────────────
+var wsConn = null, isConnected = false, giftCount = 0;
+
+function svToggleConnect() {
+  if (isConnected || wsConn) { svDisconnect(); return; }
+  var username = document.getElementById('sv-username').value.trim().replace('@','');
+  if (!username) { svShowError('Enter your TikTok username'); return; }
+  svConnect(username);
+}
+
+function svConnect(username) {
+  var btn = document.getElementById('sv-connect-btn');
+  btn.className = 'sv-connect-btn connecting';
+  btn.textContent = 'Connecting...';
+  document.getElementById('sv-error').style.display = 'none';
+  document.getElementById('sv-dot').className = 'sv-dot warn';
+  document.getElementById('sv-status-text').textContent = 'Connecting...';
+
+  try {
+    wsConn = new WebSocket('ws://127.0.0.1:21213');
+    wsConn.onopen = function() {
+      wsConn.send(JSON.stringify({ action: 'connect', username: username }));
+    };
+    wsConn.onmessage = function(e) {
+      try {
+        var d = JSON.parse(e.data);
+        if (d.type === 'connected') {
+          isConnected = true;
+          btn.className = 'sv-connect-btn connected';
+          btn.textContent = '@' + username + ' — Disconnect';
+          document.getElementById('sv-dot').className = 'sv-dot on';
+          document.getElementById('sv-status-text').textContent = 'Live @' + username;
+        } else if (d.type === 'gift') {
+          svHandleGift(d);
+        } else if (d.type === 'error') {
+          svShowError(d.message);
+        }
+      } catch(err) {}
+    };
+    wsConn.onerror = function() { svShowError('Could not connect to TikTok bridge (port 21213)'); svDisconnect(); };
+    wsConn.onclose = function() { if (isConnected) svDisconnect(); };
+  } catch(e) { svShowError(e.message); }
+}
+
+function svDisconnect() {
+  if (wsConn) { try { wsConn.close(); } catch(e) {} wsConn = null; }
+  isConnected = false;
+  var btn = document.getElementById('sv-connect-btn');
+  btn.className = 'sv-connect-btn idle';
+  btn.textContent = '♪ CONNECT MY LIVE';
+  document.getElementById('sv-dot').className = 'sv-dot';
+  document.getElementById('sv-status-text').textContent = 'Not connected';
+}
+
+function svShowError(msg) {
+  var e = document.getElementById('sv-error');
+  e.textContent = msg; e.style.display = 'block';
+  setTimeout(function() { e.style.display = 'none'; }, 5000);
+  var btn = document.getElementById('sv-connect-btn');
+  btn.className = 'sv-connect-btn idle';
+  btn.textContent = '♪ CONNECT MY LIVE';
+  document.getElementById('sv-dot').className = 'sv-dot';
+  document.getElementById('sv-status-text').textContent = 'Not connected';
+}
+
+function svHandleGift(d) {
+  // Match gift by coins value (highest matching gift wins)
+  var sorted = gifts.slice().sort(function(a,b) { return b.coins - a.coins; });
+  var match = sorted.find(function(g) { return d.coins >= g.coins; }) || gifts[0];
+  if (!match) return;
+
+  svFireAction(match.action);
+  svAddRecent(d.username || 'viewer', d.coins, match);
+  giftCount++;
+  var badge = document.getElementById('sv-gift-count');
+  badge.textContent = '🎁 ' + giftCount;
+  badge.classList.add('show');
+}
+
+function svAddRecent(user, coins, gift) {
+  var c = document.getElementById('sv-recent');
+  var empty = c.querySelector('.rg-empty');
+  if (empty) empty.remove();
+  var now = new Date();
+  var t = now.getHours().toString().padStart(2,'0') + ':' + now.getMinutes().toString().padStart(2,'0');
+  var actionLabel = ACTIONS[gift.action] ? ACTIONS[gift.action].label : gift.action;
+  var el = document.createElement('div');
+  el.className = 'recent-gift';
+  el.innerHTML =
+    '<span class="rg-time">' + t + '</span>' +
+    '<div class="rg-user">@' + user + ' sent ' + gift.emoji + ' ' + gift.name + '</div>' +
+    '<div class="rg-action" style="color:#a78bfa">' + actionLabel + '</div>';
+  c.insertBefore(el, c.firstChild);
+  while (c.children.length > 50) c.removeChild(c.lastChild);
+}
+
+// ── Init ──────────────────────────────────────────────────────────
+svLoadGifts();
+svRenderGifts();
+
+// Show version from package.json if available
+try {
+  var pkg = require ? null : null; // No require in renderer with contextIsolation off... use hardcoded
+} catch(e) {}
+</script>
+
+</body>
+</html>
