@@ -13,7 +13,7 @@ on:
 
 jobs:
   build-windows:
-    name: Build Windows EXE
+    name: Build Windows Installer
     runs-on: windows-latest
 
     steps:
@@ -43,52 +43,35 @@ jobs:
           VERSION="${{ steps.version.outputs.version }}"
           node -e "
             const fs = require('fs');
-            // Strip BOM (added by git CRLF normalization on Windows runners)
             const raw = fs.readFileSync('package.json', 'utf8').replace(/^﻿/, '');
             const pkg = JSON.parse(raw);
             pkg.version = '$VERSION';
-            // Remove icon paths - no icon asset in repo
             delete pkg.build.win.icon;
             delete pkg.build.nsis.installerIcon;
             delete pkg.build.nsis.uninstallerIcon;
-            // Write back clean UTF-8, no BOM
             fs.writeFileSync('package.json', JSON.stringify(pkg, null, 2) + '\n', { encoding: 'utf8' });
-            console.log('package.json: BOM stripped, version set to', pkg.version);
+            console.log('Set version to', pkg.version, '- BOM stripped');
           "
 
       - name: Install dependencies
         run: npm install
 
-      - name: Build portable app with electron-packager
-        shell: bash
-        run: |
-          VERSION="${{ steps.version.outputs.version }}"
-          npx electron-packager . "Subway Surfers LIVE" \
-            --platform=win32 \
-            --arch=x64 \
-            --electron-version=28.0.0 \
-            --out=dist \
-            --overwrite \
-            --ignore="^/dist" \
-            --ignore="node_modules/.cache" \
-            --ignore="^/.github" \
-            --app-version="$VERSION"
+      - name: Build NSIS installer
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: false
+          CSC_LINK: ""
+        run: npm run build
 
-      - name: Zip the build output
+      - name: List build output
         shell: powershell
-        run: |
-          $version = "${{ steps.version.outputs.version }}"
-          $src = "dist\Subway Surfers LIVE-win32-x64"
-          $zip = "dist\SubwaySurfersLIVE-v$version-win64.zip"
-          Compress-Archive -Path "$src\*" -DestinationPath $zip -Force
-          Write-Host "Created: $zip"
-          Get-Item $zip | Select-Object Name, Length
+        run: Get-ChildItem dist -Recurse -File | Select-Object Name, @{N='MB';E={[math]::Round($_.Length/1MB,1)}}
 
-      - name: Upload artifact
+      - name: Upload installer artifact
         uses: actions/upload-artifact@v4
         with:
-          name: SubwaySurfersLIVE-v${{ steps.version.outputs.version }}-win64
-          path: dist/*.zip
+          name: SubwaySurfersLIVE-v${{ steps.version.outputs.version }}-installer
+          path: |
+            dist/*.exe
           if-no-files-found: error
 
       - name: Create GitHub Release
@@ -99,18 +82,23 @@ jobs:
           body: |
             ## Subway Surfers LIVE v${{ steps.version.outputs.version }}
 
-            ### How to install
-            1. Download `SubwaySurfersLIVE-v${{ steps.version.outputs.version }}-win64.zip`
-            2. Extract the zip anywhere
-            3. Run `Subway Surfers LIVE.exe` inside the extracted folder
+            ### Install
+            Download **`Subway Surfers LIVE Setup ${{ steps.version.outputs.version }}.exe`** and run it.
+
+            The installer will add a desktop shortcut and Start Menu entry.
 
             ### Features
-            - Full Subway Surfers game (no ads, no paywalls)
+            - Full Subway Surfers game — no ads, no paywalls
             - TikTok Live gift integration
             - Customizable gift → trigger mapping
             - Press **F2** to open/close the settings panel
-            - Requires a TikTok Live bridge on `ws://127.0.0.1:21213`
-          files: dist/*.zip
+            - Requires a TikTok Live bridge running on `ws://127.0.0.1:21213`
+
+            ### To release a new version
+            ```
+            git tag v1.x.x && git push origin v1.x.x
+            ```
+          files: dist/*.exe
           draft: false
           prerelease: false
         env:
