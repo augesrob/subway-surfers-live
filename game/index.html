@@ -295,22 +295,26 @@ function svFlash(text,color){
   clearTimeout(_ft);_ft=setTimeout(function(){el.classList.remove('show');},2500);
 }
 
-// ── Keyboard simulation ───────────────────────────────────────────
-function svKey(key,times){
-  var codes={ArrowUp:38,ArrowDown:40,ArrowLeft:37,ArrowRight:39};
-  for(var i=0;i<(times||1);i++){
-    (function(d){setTimeout(function(){
-      var opts={key:key,code:key,keyCode:codes[key]||0,which:codes[key]||0,bubbles:true,cancelable:true};
-      // Dispatch to window, document, AND canvas — Unity may listen on any of them
-      [window,document,document.querySelector('canvas')].forEach(function(t){
-        if(t)try{t.dispatchEvent(new KeyboardEvent('keydown',opts));}catch(e){}
-      });
-      setTimeout(function(){
-        [window,document,document.querySelector('canvas')].forEach(function(t){
-          if(t)try{t.dispatchEvent(new KeyboardEvent('keyup',opts));}catch(e){}
-        });
-      },120);
-    },d*350);})(i);
+// ── Keyboard simulation ── dispatch to document, same as real keypresses ─
+function svKey(key, times) {
+  var CODES = {' ':32, 'ArrowUp':38, 'ArrowDown':40, 'ArrowLeft':37, 'ArrowRight':39};
+  for (var i = 0; i < (times || 1); i++) {
+    (function(d) {
+      setTimeout(function() {
+        var opts = {
+          key: key,
+          code: key === ' ' ? 'Space' : key,
+          keyCode: CODES[key] || 0,
+          which: CODES[key] || 0,
+          bubbles: true,
+          cancelable: true
+        };
+        document.dispatchEvent(new KeyboardEvent('keydown', opts));
+        setTimeout(function() {
+          document.dispatchEvent(new KeyboardEvent('keyup', opts));
+        }, 100);
+      }, d * 350);
+    })(i);
   }
 }
 
@@ -330,20 +334,21 @@ function svSendAll(method,param){
 
 // ── Actions ───────────────────────────────────────────────────────
 var ACTIONS={
-  coins:     {label:'💰 Spawn Coins',     flash:{text:'💰 COINS!',   color:'#ffd700'},fn:function(){svSendAll('SpawnCoinRows','5');svKey('ArrowUp');}},
-  jump:      {label:'⬆️ Jump',            flash:{text:'⬆️ JUMP!',    color:'#55efc4'},fn:function(){svKey('ArrowUp');}},
-  dbl_jump:  {label:'⬆️⬆️ Double Jump',  flash:{text:'⬆️⬆️ JUMPS!', color:'#00b894'},fn:function(){svKey('ArrowUp',2);}},
-  slide:     {label:'⬇️ Slide',           flash:{text:'⬇️ SLIDE!',   color:'#74b9ff'},fn:function(){svKey('ArrowDown');}},
-  left:      {label:'⬅️ Move Left',       flash:{text:'⬅️ LEFT!',    color:'#a29bfe'},fn:function(){svKey('ArrowLeft');}},
-  right:     {label:'➡️ Move Right',      flash:{text:'➡️ RIGHT!',   color:'#fd79a8'},fn:function(){svKey('ArrowRight');}},
-  jetpack:   {label:'🚀 Jetpack',         flash:{text:'🚀 JETPACK!', color:'#ff9f43'},fn:function(){svSendAll('ForceSpawnPickupType','Jetpack');}},
-  magnet:    {label:'🧲 Magnet',          flash:{text:'🧲 MAGNET!',  color:'#74b9ff'},fn:function(){svSendAll('ForceSpawnPickupType','CoinMagnet');}},
+  jump:      {label:'⬆️ Jump',            flash:{text:'⬆️ JUMP!',      color:'#55efc4'},fn:function(){svKey(' ');}},
+  dbl_jump:  {label:'⬆️⬆️ Double Jump',  flash:{text:'⬆️⬆️ JUMPS!',   color:'#00b894'},fn:function(){svKey(' ',2);}},
+  slide:     {label:'⬇️ Slide/Roll',      flash:{text:'⬇️ SLIDE!',     color:'#74b9ff'},fn:function(){svKey('ArrowDown');}},
+  left:      {label:'⬅️ Move Left',       flash:{text:'⬅️ LEFT!',      color:'#a29bfe'},fn:function(){svKey('ArrowLeft');}},
+  right:     {label:'➡️ Move Right',      flash:{text:'➡️ RIGHT!',     color:'#fd79a8'},fn:function(){svKey('ArrowRight');}},
+  jump_left: {label:'↖️ Jump Left',       flash:{text:'↖️ JUMP LEFT!', color:'#a78bfa'},fn:function(){svKey('ArrowLeft');svKey(' ');}},
+  jump_right:{label:'↗️ Jump Right',      flash:{text:'↗️ JUMP RIGHT!',color:'#f472b6'},fn:function(){svKey('ArrowRight');svKey(' ');}},
+  coins:     {label:'💰 Spawn Coins',     flash:{text:'💰 COINS!',     color:'#ffd700'},fn:function(){svSendAll('SpawnCoinRows','5');}},
+  jetpack:   {label:'🚀 Jetpack',         flash:{text:'🚀 JETPACK!',   color:'#ff9f43'},fn:function(){svSendAll('ForceSpawnPickupType','Jetpack');}},
+  magnet:    {label:'🧲 Magnet',          flash:{text:'🧲 MAGNET!',    color:'#74b9ff'},fn:function(){svSendAll('ForceSpawnPickupType','CoinMagnet');}},
   hoverboard:{label:'🛹 Hoverboard',      flash:{text:'🛹 HOVERBOARD!',color:'#fd79a8'},fn:function(){svSendAll('ForceSpawnPickupType','Hoverboard');}},
-  x2:        {label:'✖️ x2 Score',        flash:{text:'✖️ x2 SCORE!',color:'#a29bfe'},fn:function(){svSendAll('ForceSpawnPickupType','Multiplier');}},
-  sneakers:  {label:'👟 Super Sneakers',  flash:{text:'👟 SNEAKERS!', color:'#55efc4'},fn:function(){svSendAll('ForceSpawnPickupType','SuperSneakers');}},
-  speed:     {label:'⚡ Speed Boost',     flash:{text:'⚡ SPEED!',    color:'#fdcb6e'},fn:function(){svKey('ArrowUp',2);}},
-  hype:      {label:'🎉 Hype Flash',      flash:{text:'🎉 HYPE!',     color:'#fd79a8'},fn:function(){}},
-  none:      {label:'❌ No Action',       flash:null,                                 fn:function(){}},
+  x2:        {label:'✖️ x2 Score',        flash:{text:'✖️ x2 SCORE!',  color:'#a29bfe'},fn:function(){svSendAll('ForceSpawnPickupType','Multiplier');}},
+  sneakers:  {label:'👟 Super Sneakers',  flash:{text:'👟 SNEAKERS!',  color:'#55efc4'},fn:function(){svSendAll('ForceSpawnPickupType','SuperSneakers');}},
+  hype:      {label:'🎉 Hype Flash',      flash:{text:'🎉 HYPE!',      color:'#fd79a8'},fn:function(){}},
+  none:      {label:'❌ No Action',       flash:null,                                   fn:function(){}},
 };
 function svFire(key){
   var a=ACTIONS[key];if(!a)return;
