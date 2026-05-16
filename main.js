@@ -1,4 +1,4 @@
-const { app, BrowserWindow, shell } = require('electron');
+const { app, BrowserWindow, ipcMain, shell } = require('electron');
 const path = require('path');
 
 let win;
@@ -13,20 +13,27 @@ app.whenReady().then(() => {
     backgroundColor: '#231F20',
     autoHideMenuBar: true,
     webPreferences: {
-      contextIsolation: false,
+      preload: path.join(__dirname, 'preload.js'),
+      contextIsolation: true,
       nodeIntegration: false,
-      webSecurity: false,           // needed for CDN game assets
+      webSecurity: false,
       allowRunningInsecureContent: true,
     }
   });
 
   win.loadFile('game/index.html');
 
-  // Open external links in browser, not in app
   win.webContents.setWindowOpenHandler(({ url }) => {
     shell.openExternal(url);
     return { action: 'deny' };
   });
+});
+
+// Inject real trusted OS-level keystrokes — bypasses isTrusted=false limitation
+ipcMain.on('game-key', (event, keyCode) => {
+  if (!win || win.isDestroyed()) return;
+  win.webContents.sendInputEvent({ type: 'keyDown', keyCode });
+  setTimeout(() => win.webContents.sendInputEvent({ type: 'keyUp', keyCode }), 120);
 });
 
 app.on('window-all-closed', () => {

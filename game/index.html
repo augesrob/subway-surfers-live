@@ -295,24 +295,24 @@ function svFlash(text,color){
   clearTimeout(_ft);_ft=setTimeout(function(){el.classList.remove('show');},2500);
 }
 
-// ── Keyboard simulation ── dispatch to document, same as real keypresses ─
+// ── Keyboard injection via Electron sendInputEvent (trusted OS-level events) ─
+// JS KeyboardEvent dispatch has isTrusted=false which Unity ignores.
+// webContents.sendInputEvent() in main.js injects real trusted keystrokes.
+var KEY_MAP = {
+  ' ':           'Space',
+  'ArrowUp':     'Up',
+  'ArrowDown':   'Down',
+  'ArrowLeft':   'Left',
+  'ArrowRight':  'Right',
+};
 function svKey(key, times) {
-  var CODES = {' ':32, 'ArrowUp':38, 'ArrowDown':40, 'ArrowLeft':37, 'ArrowRight':39};
+  var code = KEY_MAP[key] || key;
   for (var i = 0; i < (times || 1); i++) {
     (function(d) {
       setTimeout(function() {
-        var opts = {
-          key: key,
-          code: key === ' ' ? 'Space' : key,
-          keyCode: CODES[key] || 0,
-          which: CODES[key] || 0,
-          bubbles: true,
-          cancelable: true
-        };
-        document.dispatchEvent(new KeyboardEvent('keydown', opts));
-        setTimeout(function() {
-          document.dispatchEvent(new KeyboardEvent('keyup', opts));
-        }, 100);
+        if (window.electronAPI && window.electronAPI.sendKey) {
+          window.electronAPI.sendKey(code);
+        }
       }, d * 350);
     })(i);
   }
