@@ -20,7 +20,7 @@ app.whenReady().then(() => {
     }
   });
 
-  win.loadFile('index.html');
+  win.loadFile('game/index.html');
 
   // Open external links in browser, not in app
   win.webContents.setWindowOpenHandler(({ url }) => {
