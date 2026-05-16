@@ -7,15 +7,17 @@
 *{margin:0;padding:0;box-sizing:border-box;}
 html,body{width:100%;height:100%;overflow:hidden;background:#231F20;font-family:'Segoe UI',Arial,sans-serif;}
 
-/* Flash overlay */
+/* Flash overlay — max z-index so Unity CSS can't bury it */
 #sv-flash{
-  position:fixed;top:50px;left:50%;transform:translateX(-50%);
-  z-index:9000;pointer-events:none;opacity:0;
-  font-size:28px;font-weight:900;white-space:nowrap;
-  background:rgba(0,0,0,.88);padding:12px 30px;
-  border-radius:40px;border:2px solid currentColor;letter-spacing:1px;
+  position:fixed!important;top:60px!important;left:50%!important;
+  transform:translateX(-50%)!important;
+  z-index:2147483647!important;pointer-events:none;opacity:0;
+  font-size:32px;font-weight:900;white-space:nowrap;
+  background:rgba(0,0,0,.92)!important;padding:14px 34px;
+  border-radius:40px;border:3px solid currentColor;letter-spacing:1px;
+  display:block!important;
 }
-#sv-flash.show{animation:svflash 2.5s forwards;}
+#sv-flash.show{animation:svflash 2.5s forwards!important;}
 @keyframes svflash{
   0%  {opacity:0;transform:translateX(-50%) scale(.85);}
   10% {opacity:1;transform:translateX(-50%) scale(1.05);}
@@ -285,20 +287,30 @@ window.config={
 var _ft;
 function svFlash(text,color){
   var el=document.getElementById('sv-flash');
+  // Re-append to body so it's always the topmost DOM element
+  document.body.appendChild(el);
   el.textContent=text;el.style.color=color;
-  el.style.borderColor=color;el.style.boxShadow='0 0 40px '+color+'88';
+  el.style.borderColor=color;el.style.boxShadow='0 0 50px '+color+'99';
   el.classList.remove('show');void el.offsetWidth;el.classList.add('show');
   clearTimeout(_ft);_ft=setTimeout(function(){el.classList.remove('show');},2500);
 }
 
 // ── Keyboard simulation ───────────────────────────────────────────
 function svKey(key,times){
+  var codes={ArrowUp:38,ArrowDown:40,ArrowLeft:37,ArrowRight:39};
   for(var i=0;i<(times||1);i++){
     (function(d){setTimeout(function(){
-      var t=document.querySelector('canvas')||document.body;
-      t.dispatchEvent(new KeyboardEvent('keydown',{key:key,code:key,bubbles:true,cancelable:true}));
-      setTimeout(function(){t.dispatchEvent(new KeyboardEvent('keyup',{key:key,code:key,bubbles:true,cancelable:true}));},80);
-    },d*200);})(i);
+      var opts={key:key,code:key,keyCode:codes[key]||0,which:codes[key]||0,bubbles:true,cancelable:true};
+      // Dispatch to window, document, AND canvas — Unity may listen on any of them
+      [window,document,document.querySelector('canvas')].forEach(function(t){
+        if(t)try{t.dispatchEvent(new KeyboardEvent('keydown',opts));}catch(e){}
+      });
+      setTimeout(function(){
+        [window,document,document.querySelector('canvas')].forEach(function(t){
+          if(t)try{t.dispatchEvent(new KeyboardEvent('keyup',opts));}catch(e){}
+        });
+      },120);
+    },d*350);})(i);
   }
 }
 
@@ -361,17 +373,31 @@ function actionOpts(sel){
 function renderGifts(){
   var gl=document.getElementById('sv-gifts');
   gl.innerHTML=gifts.map(function(g,i){
-    return '<div class="gift-row">'+
+    return '<div class="gift-row" data-i="'+i+'">'+
       '<span class="gift-emoji">'+g.emoji+'</span>'+
       '<div class="gift-info"><div class="gift-name">'+g.name+'</div><div class="gift-coins">'+g.coins+'c</div></div>'+
-      '<select class="gift-action" onchange="gifts['+i+'].action=this.value;saveGifts()">'+actionOpts(g.action)+'</select>'+
-      '<button class="gift-del" onclick="gifts.splice('+i+',1);saveGifts();renderGifts()" title="Remove">✕</button>'+
+      '<select class="gift-action">'+actionOpts(g.action)+'</select>'+
+      '<button class="gift-del" title="Remove">✕</button>'+
     '</div>';
   }).join('');
 
-  document.getElementById('sv-tests').innerHTML=gifts.map(function(g,i){
-    return '<button class="test-btn" onclick="svFire(gifts['+i+'].action)">'+g.emoji+' '+g.name+'</button>';
+  // Attach listeners properly — no inline onclick
+  gl.querySelectorAll('.gift-action').forEach(function(sel,i){
+    sel.addEventListener('change',function(){gifts[i].action=this.value;saveGifts();});
+  });
+  gl.querySelectorAll('.gift-del').forEach(function(btn,i){
+    btn.addEventListener('click',function(){gifts.splice(i,1);saveGifts();renderGifts();});
+  });
+
+  var tg=document.getElementById('sv-tests');
+  tg.innerHTML=gifts.map(function(g){
+    return '<button class="test-btn" data-action="'+g.action+'">'+g.emoji+' '+g.name+'</button>';
   }).join('');
+  tg.querySelectorAll('.test-btn').forEach(function(btn){
+    btn.addEventListener('click',function(){
+      svFire(this.dataset.action);
+    });
+  });
 }
 
 // Add gift form
