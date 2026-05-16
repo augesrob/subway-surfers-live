@@ -206,6 +206,13 @@ html,body{width:100%;height:100%;overflow:hidden;background:#231F20;font-family:
     <div class="sv-label"><span>🔍</span> Find Game Objects</div>
     <div style="font-size:10px;color:#4b5563;margin-bottom:8px;">Run while actively playing a run. Finds which Unity objects exist so triggers can work.</div>
     <button class="sv-btn idle" id="sv-scan-btn" onclick="svScanObjects()" style="margin-top:0;">🔍 SCAN OBJECTS NOW</button>
+    <div style="margin-top:8px;font-size:10px;color:#4b5563;">Scan methods on a known object:</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px;margin-top:4px;">
+      <button class="test-btn" onclick="svScanMethods('DailyLetterPickupManager')">📦 PickupMgr</button>
+      <button class="test-btn" onclick="svScanMethods('TimeScaleManager')">⏱ TimeScale</button>
+      <button class="test-btn" onclick="svScanMethods('ThemeManager')">🎨 Theme</button>
+      <button class="test-btn" onclick="svScanMethods('SocialManager')">👥 Social</button>
+    </div>
     <div id="sv-scan-results" style="margin-top:8px;font-family:monospace;font-size:10px;color:#10b981;display:none;word-break:break-all;"></div>
   </div>
 
@@ -326,7 +333,7 @@ function svKey(key, times) {
   }
 }
 
-// ── SendMessage (best-effort) ─────────────────────────────────────
+// ── SendMessage ───────────────────────────────────────────────────
 function svSend(obj,method,param){
   var sm=(window.unityGame&&typeof window.unityGame.SendMessage==='function')
     ?window.unityGame.SendMessage.bind(window.unityGame)
@@ -334,29 +341,73 @@ function svSend(obj,method,param){
   if(!sm)return;
   try{param!==undefined?sm(obj,method,param):sm(obj,method);}catch(e){}
 }
-function svSendAll(method,param){
-  ['PickupManager','InGame','GameManager','PickupManagerController'].forEach(function(o){
+// Target confirmed-live objects from scanner + fallbacks
+function svSendPickup(method,param){
+  ['DailyLetterPickupManager','PickupManager','PickupManagerController','InGame','GameManager'].forEach(function(o){
     svSend(o,method,param);
   });
+}
+function svSendTime(method,param){
+  svSend('TimeScaleManager',method,param);
+}
+function svSendTheme(method,param){
+  svSend('ThemeManager',method,param);
 }
 
 // ── Actions ───────────────────────────────────────────────────────
 var ACTIONS={
-  jump:      {label:'⬆️ Jump',            flash:{text:'⬆️ JUMP!',      color:'#55efc4'},fn:function(){svKey(' ');}},
-  dbl_jump:  {label:'⬆️⬆️ Double Jump',  flash:{text:'⬆️⬆️ JUMPS!',   color:'#00b894'},fn:function(){svKey(' ',2);}},
-  slide:     {label:'⬇️ Slide/Roll',      flash:{text:'⬇️ SLIDE!',     color:'#74b9ff'},fn:function(){svKey('ArrowDown');}},
-  left:      {label:'⬅️ Move Left',       flash:{text:'⬅️ LEFT!',      color:'#a29bfe'},fn:function(){svKey('ArrowLeft');}},
-  right:     {label:'➡️ Move Right',      flash:{text:'➡️ RIGHT!',     color:'#fd79a8'},fn:function(){svKey('ArrowRight');}},
-  jump_left: {label:'↖️ Jump Left',       flash:{text:'↖️ JUMP LEFT!', color:'#a78bfa'},fn:function(){svKey('ArrowLeft');svKey(' ');}},
-  jump_right:{label:'↗️ Jump Right',      flash:{text:'↗️ JUMP RIGHT!',color:'#f472b6'},fn:function(){svKey('ArrowRight');svKey(' ');}},
-  coins:     {label:'💰 Spawn Coins',     flash:{text:'💰 COINS!',     color:'#ffd700'},fn:function(){svSendAll('SpawnCoinRows','5');}},
-  jetpack:   {label:'🚀 Jetpack',         flash:{text:'🚀 JETPACK!',   color:'#ff9f43'},fn:function(){svSendAll('ForceSpawnPickupType','Jetpack');}},
-  magnet:    {label:'🧲 Magnet',          flash:{text:'🧲 MAGNET!',    color:'#74b9ff'},fn:function(){svSendAll('ForceSpawnPickupType','CoinMagnet');}},
-  hoverboard:{label:'🛹 Hoverboard',      flash:{text:'🛹 HOVERBOARD!',color:'#fd79a8'},fn:function(){svSendAll('ForceSpawnPickupType','Hoverboard');}},
-  x2:        {label:'✖️ x2 Score',        flash:{text:'✖️ x2 SCORE!',  color:'#a29bfe'},fn:function(){svSendAll('ForceSpawnPickupType','Multiplier');}},
-  sneakers:  {label:'👟 Super Sneakers',  flash:{text:'👟 SNEAKERS!',  color:'#55efc4'},fn:function(){svSendAll('ForceSpawnPickupType','SuperSneakers');}},
-  hype:      {label:'🎉 Hype Flash',      flash:{text:'🎉 HYPE!',      color:'#fd79a8'},fn:function(){}},
-  none:      {label:'❌ No Action',       flash:null,                                   fn:function(){}},
+  // ── Keyboard (confirmed working via sendInputEvent) ──
+  jump:       {label:'⬆️ Jump',           flash:{text:'⬆️ JUMP!',       color:'#55efc4'},fn:function(){svKey(' ');}},
+  dbl_jump:   {label:'⬆️⬆️ Double Jump', flash:{text:'⬆️⬆️ JUMPS!',    color:'#00b894'},fn:function(){svKey(' ',2);}},
+  slide:      {label:'⬇️ Slide/Roll',     flash:{text:'⬇️ SLIDE!',      color:'#74b9ff'},fn:function(){svKey('ArrowDown');}},
+  left:       {label:'⬅️ Move Left',      flash:{text:'⬅️ LEFT!',       color:'#a29bfe'},fn:function(){svKey('ArrowLeft');}},
+  right:      {label:'➡️ Move Right',     flash:{text:'➡️ RIGHT!',      color:'#fd79a8'},fn:function(){svKey('ArrowRight');}},
+  jump_left:  {label:'↖️ Jump Left',      flash:{text:'↖️ JUMP LEFT!',  color:'#a78bfa'},fn:function(){svKey('ArrowLeft');setTimeout(function(){svKey(' ');},80);}},
+  jump_right: {label:'↗️ Jump Right',     flash:{text:'↗️ JUMP RIGHT!', color:'#f472b6'},fn:function(){svKey('ArrowRight');setTimeout(function(){svKey(' ');},80);}},
+  // ── Pickups via DailyLetterPickupManager (real confirmed object) ──
+  coins:      {label:'💰 Spawn Coins',    flash:{text:'💰 COINS!',      color:'#ffd700'},fn:function(){
+    svSendPickup('SpawnCoinRows','5');
+    svSendPickup('SpawnCoins','20');
+    svSendPickup('AddCoins','20');
+  }},
+  jetpack:    {label:'🚀 Jetpack',        flash:{text:'🚀 JETPACK!',    color:'#ff9f43'},fn:function(){
+    svSendPickup('ForceSpawnPickupType','Jetpack');
+    svSendPickup('SetForceSpawnPickupTypeAndOriginalTo','Jetpack');
+    svSendPickup('StartJetpack','');
+    svSendPickup('ActivateJetpack','');
+  }},
+  magnet:     {label:'🧲 Magnet',         flash:{text:'🧲 MAGNET!',     color:'#74b9ff'},fn:function(){
+    svSendPickup('ForceSpawnPickupType','CoinMagnet');
+    svSendPickup('SetForceSpawnPickupTypeAndOriginalTo','CoinMagnet');
+    svSendPickup('StartMagnet','');
+  }},
+  hoverboard: {label:'🛹 Hoverboard',     flash:{text:'🛹 HOVERBOARD!', color:'#fd79a8'},fn:function(){
+    svSendPickup('ForceSpawnPickupType','Hoverboard');
+    svSendPickup('SetForceSpawnPickupTypeAndOriginalTo','Hoverboard');
+  }},
+  x2:         {label:'✖️ x2 Score',       flash:{text:'✖️ x2 SCORE!',   color:'#a29bfe'},fn:function(){
+    svSendPickup('ForceSpawnPickupType','Multiplier');
+    svSendPickup('StartDoubleCoins','');
+  }},
+  sneakers:   {label:'👟 Super Sneakers', flash:{text:'👟 SNEAKERS!',   color:'#55efc4'},fn:function(){
+    svSendPickup('ForceSpawnPickupType','SuperSneakers');
+    svSendPickup('StartDoubleJump','');
+  }},
+  // ── TimeScaleManager (confirmed live object) ──
+  speedup:    {label:'⚡ Speed Boost',    flash:{text:'⚡ SPEED UP!',    color:'#fdcb6e'},fn:function(){
+    svSendTime('SetTimeScale','1.5');
+    svSendTime('IncreaseTimeScale','1.5');
+    svSendTime('SpeedUp','');
+    setTimeout(function(){ svSendTime('SetTimeScale','1'); svSendTime('ResetTimeScale',''); }, 5000);
+  }},
+  slowmo:     {label:'🐌 Slow Motion',    flash:{text:'🐌 SLOW MO!',    color:'#81ecec'},fn:function(){
+    svSendTime('SetTimeScale','0.5');
+    svSendTime('DecreaseTimeScale','0.5');
+    setTimeout(function(){ svSendTime('SetTimeScale','1'); svSendTime('ResetTimeScale',''); }, 4000);
+  }},
+  // ── Visual only ──
+  hype:       {label:'🎉 Hype Flash',     flash:{text:'🎉 HYPE!',       color:'#fd79a8'},fn:function(){}},
+  none:       {label:'❌ No Action',      flash:null,                                    fn:function(){}},
 };
 function svFire(key){
   var a=ACTIONS[key];if(!a)return;
@@ -509,6 +560,97 @@ function svAddRecent(user,gift){
     '<div class="rg-action" style="color:#a78bfa">'+(ACTIONS[gift.action]?ACTIONS[gift.action].label:gift.action)+'</div>';
   c.insertBefore(el,c.firstChild);
   while(c.children.length>50)c.removeChild(c.lastChild);
+}
+
+// ── Confirmed live objects from scan ─────────────────────────────
+var LIVE_OBJECTS = ['DailyLetterPickupManager','ThemeManager','TimeScaleManager','AssetManager','SocialManager','InAppManager','ProductPlacementManager'];
+
+// ── Method scanner — call on a specific known-live object ─────────
+function svScanMethods(objName) {
+  var btn = document.getElementById('sv-scan-btn');
+  var results = document.getElementById('sv-scan-results');
+  btn.textContent = '⏳ Scanning methods on ' + objName + '...';
+  btn.disabled = true;
+
+  var METHODS = [
+    // Pickup/powerup spawning
+    'ForceSpawnPickupType','SpawnPickupType','SpawnPickup','SpawnCoinRows','SpawnCoins',
+    'SetForceSpawnPickupTypeAndOriginalTo','ActivatePickup','GivePickup','TriggerPickup',
+    'StartJetpack','StartMagnet','StartHoverboard','StartMultiplier','StartSneakers',
+    'ActivateJetpack','ActivateMagnet','ActivateHoverboard','ActivateMultiplier',
+    'GiveJetpack','GiveMagnet','GiveHoverboard','GiveMultiplier','GiveSneakers',
+    'AddCoin','AddCoins','AddScore','IncreaseCoin','IncreaseScore',
+    // TimeScale / speed
+    'SetTimeScale','IncreaseTimeScale','DecreaseTimeScale','ResetTimeScale',
+    'SpeedUp','SlowDown','StartSpeedBoost','StopSpeedBoost','SetSpeed',
+    'Pause','Resume','PauseGame','ResumeGame',
+    // Theme
+    'SetTheme','ChangeTheme','NextTheme','LoadTheme','SwitchTheme',
+    // Generic
+    'StartDoubleCoins','StopDoubleCoins','StartDoubleJump','StopDoubleJump',
+    'AddLife','GiveLife','RevivePlayer','SaveMe',
+    'ClearObstacles','ClearTrack','RemoveObstacles',
+    'MysteryPowerup','SelectRandomCharacterModifier',
+  ];
+
+  var found = [];
+  var _origLog = console.log.bind(console);
+  var _origErr = console.error.bind(console);
+  function intercept(msg) {
+    if (typeof msg !== 'string') return;
+    var m = msg.match(/SendMessage: object .+? does not have receiver for function (.+?)!/);
+    if (m) { /* method not found on object */ }
+    // If NO "does not have receiver" and NO "not found" → method WAS called!
+  }
+
+  // Better approach: try each method, if we DON'T get "does not have receiver" log → it ran
+  var notHaveReceiver = {};
+  console.log = function() {
+    var msg = arguments[0];
+    if (typeof msg === 'string') {
+      var m = msg.match(/does not have receiver for function ([^\s!]+)/);
+      if (m) notHaveReceiver[m[1]] = true;
+    }
+    return _origLog.apply(console, arguments);
+  };
+  console.error = function() {
+    var msg = arguments[0];
+    if (typeof msg === 'string') {
+      var m = msg.match(/does not have receiver for function ([^\s!]+)/);
+      if (m) notHaveReceiver[m[1]] = true;
+    }
+    return _origErr.apply(console, arguments);
+  };
+
+  var sm = (window.unityGame && typeof window.unityGame.SendMessage === 'function')
+    ? window.unityGame.SendMessage.bind(window.unityGame)
+    : (typeof window.SendMessage === 'function' ? window.SendMessage : null);
+
+  var i = 0;
+  var tried = [];
+  var iv = setInterval(function() {
+    if (i >= METHODS.length) {
+      clearInterval(iv);
+      setTimeout(function() {
+        console.log = _origLog; console.error = _origErr;
+        var responded = tried.filter(function(m) { return !notHaveReceiver[m]; });
+        btn.textContent = '🔍 SCAN OBJECTS NOW'; btn.disabled = false;
+        results.innerHTML = '<b>Methods on ' + objName + ':</b><br>' +
+          (responded.length > 0
+            ? responded.map(function(m){ return '<span style="color:#10b981">✅ ' + m + '</span>'; }).join('<br>')
+            : '<span style="color:#ef4444">No responsive methods found</span>') +
+          '<br><br><b style="color:#4b5563">Tried ' + tried.length + ' methods</b>';
+        results.style.display = 'block';
+        console.log('[SV-SCAN] Methods that ran on', objName + ':', responded);
+      }, 600);
+      return;
+    }
+    var method = METHODS[i];
+    tried.push(method);
+    try { sm(objName, method, '1'); } catch(e) {}
+    try { sm(objName, method, 'Jetpack'); } catch(e) {}
+    i++;
+  }, 30);
 }
 
 // ── Object scanner ────────────────────────────────────────────────
